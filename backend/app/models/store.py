@@ -11,9 +11,9 @@ class Store(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
-    users = db.relationship('User', back_populates='store')
-    products = db.relationship('Product', back_populates='store')
-    supply_requests = db.relationship('SupplyRequest', back_populates='store')
+    users = db.relationship('User', back_populates='store', lazy=True)
+    products = db.relationship('Product', back_populates='store', lazy=True)
+    supply_requests = db.relationship('SupplyRequest', back_populates='store', lazy=True)
 
     def to_dict(self):
         return {

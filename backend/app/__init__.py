@@ -42,4 +42,9 @@ def create_app():
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
+    from app.routes.stores import stores_bp
+    from app.routes.products import products_bp
+    app.register_blueprint(stores_bp, url_prefix='/api/stores')
+    app.register_blueprint(products_bp, url_prefix='/api/products')
+
     return app
