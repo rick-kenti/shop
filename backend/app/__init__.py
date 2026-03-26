@@ -47,4 +47,9 @@ def create_app():
     app.register_blueprint(stores_bp, url_prefix='/api/stores')
     app.register_blueprint(products_bp, url_prefix='/api/products')
 
+    from app.routes.inventory import inventory_bp
+    from app.routes.supply_requests import supply_bp
+    app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
+    app.register_blueprint(supply_bp, url_prefix='/api/supply-requests')
+    
     return app
