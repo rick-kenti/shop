@@ -35,6 +35,9 @@ def create_app():
     mail.init_app(app)
     CORS(app)
 
+    # Import models so Flask-Migrate can detect them
+    from app.models import User, Store, Product, InventoryEntry, SupplyRequest
+
     # Register blueprints (routes)
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
