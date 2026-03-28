@@ -1,0 +1,11 @@
+## File 2: `backend/.gitignore`
+(Tells Git to ignore secret files and junk)
+
+Create a new file called `.gitignore` inside `backend` and paste:
+```
+venv/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+instance/
