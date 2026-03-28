@@ -43,21 +43,37 @@ def create_store():
 @jwt_required()
 def get_stores():
     claims = get_jwt()
-    if claims.get('role') != 'merchant':
-        return jsonify({'error': 'Only merchants can view all stores'}), 403
+    role = claims.get('role')
+    current_user_id = get_jwt_identity()
 
-    # Pagination
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
 
-    stores = Store.query.paginate(page=page, per_page=per_page, error_out=False)
-
-    return jsonify({
-        'stores': [s.to_dict() for s in stores.items],
-        'total': stores.total,
-        'pages': stores.pages,
-        'current_page': stores.page
-    }), 200
+    if role == 'merchant':
+        # Merchant sees all stores
+        stores = Store.query.paginate(page=page, per_page=per_page, error_out=False)
+        return jsonify({
+            'stores': [s.to_dict() for s in stores.items],
+            'total': stores.total,
+            'pages': stores.pages,
+            'current_page': stores.page
+        }), 200
+    elif role in ['admin', 'clerk']:
+        # Admin and clerk see only their own store
+        current_user = User.query.get(int(current_user_id))
+        if not current_user or not current_user.store_id:
+            return jsonify({'stores': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
+        store = Store.query.get(current_user.store_id)
+        if not store:
+            return jsonify({'stores': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
+        return jsonify({
+            'stores': [store.to_dict()],
+            'total': 1,
+            'pages': 1,
+            'current_page': 1
+        }), 200
+    else:
+        return jsonify({'error': 'Not authorized'}), 403
 
 
 # -----------------------------------------------

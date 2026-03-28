@@ -85,20 +85,18 @@ def create_product():
 @jwt_required()
 def get_products():
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = User.query.get(int(current_user_id))
     claims = get_jwt()
     role = claims.get('role')
 
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
 
-    # Merchants see all products
-    # Admins and clerks see only their store's products
     if role == 'merchant':
         products = Product.query.paginate(page=page, per_page=per_page, error_out=False)
     else:
-        if not current_user.store_id:
-            return jsonify({'error': 'You are not assigned to a store'}), 400
+        if not current_user or not current_user.store_id:
+            return jsonify({'products': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
         products = Product.query.filter_by(
             store_id=current_user.store_id
         ).paginate(page=page, per_page=per_page, error_out=False)
@@ -109,7 +107,6 @@ def get_products():
         'pages': products.pages,
         'current_page': products.page
     }), 200
-
 
 # -----------------------------------------------
 # GET ONE PRODUCT

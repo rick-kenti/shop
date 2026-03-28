@@ -1,5 +1,6 @@
+from app.models.store import Store
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
 from app import db
 from app.models.user import User
 from app.utils.validators import validate_email, validate_password, validate_required_fields
@@ -94,11 +95,13 @@ def login():
         return jsonify({'error': 'Please verify your account first via the invite link sent to your email.'}), 403
 
     # Check password
+    if user.password_hash == 'pending' or user.password_hash == '':
+        return jsonify({'error': 'Account not activated yet. Please use the invite link to set your password.'}), 403
+
     password_correct = bcrypt.checkpw(
         data['password'].encode('utf-8'),
         user.password_hash.encode('utf-8')
     )
-
     if not password_correct:
         return jsonify({'error': 'Invalid email or password'}), 401
 
@@ -187,39 +190,39 @@ def invite_user():
 def register():
     data = request.get_json()
 
-    # Validate required fields
     missing = validate_required_fields(data, ['token', 'full_name', 'password'])
     if missing:
         return jsonify({'error': f'Missing fields: {", ".join(missing)}'}), 400
 
-    # Find user by token
     user = User.query.filter_by(invite_token=data['token']).first()
 
     if not user:
-        return jsonify({'error': 'Invalid or expired invite token'}), 400
+        return jsonify({'error': 'Invalid or expired invite link'}), 400
 
-    # Check token expiry
     if datetime.utcnow() > user.invite_token_expiry:
-        return jsonify({'error': 'Invite token has expired. Ask for a new invite.'}), 400
+        return jsonify({'error': 'Invite link has expired. Ask for a new one.'}), 400
 
-    # Validate password
     if not validate_password(data['password']):
         return jsonify({'error': 'Password must be at least 6 characters'}), 400
 
-    # Hash the password
     hashed = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
 
-    # Complete registration
     user.full_name = data['full_name']
     user.password_hash = hashed.decode('utf-8')
     user.is_verified = True
     user.invite_token = None
     user.invite_token_expiry = None
 
+    # If user has no store assigned, assign the first available store
+    if not user.store_id:
+        first_store = Store.query.first()
+        if first_store:
+            user.store_id = first_store.id
+
     db.session.commit()
 
     return jsonify({
-        'message': f'Registration complete! Welcome, {user.full_name} 🎉',
+        'message': f'Welcome, {user.full_name}! Registration complete 🎉',
         'user': user.to_dict()
     }), 200
 

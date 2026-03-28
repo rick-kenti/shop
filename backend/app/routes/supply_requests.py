@@ -18,17 +18,15 @@ def create_request():
     if claims.get('role') != 'clerk':
         return jsonify({'error': 'Only clerks can request supplies'}), 403
 
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     current_user = User.query.get(current_user_id)
     data = request.get_json()
 
-    # Validate required fields
     required = ['product_id', 'quantity_requested']
     missing = [f for f in required if f not in data or data[f] == '']
     if missing:
         return jsonify({'error': f'Missing fields: {", ".join(missing)}'}), 400
 
-    # Check product exists
     product = Product.query.get(data['product_id'])
     if not product:
         return jsonify({'error': 'Product not found'}), 404
@@ -36,10 +34,13 @@ def create_request():
     if int(data['quantity_requested']) <= 0:
         return jsonify({'error': 'Quantity must be greater than zero'}), 400
 
+    # Use product's store_id as fallback if user has no store_id
+    store_id = current_user.store_id or product.store_id
+
     supply_request = SupplyRequest(
         product_id=data['product_id'],
         clerk_id=current_user_id,
-        store_id=current_user.store_id,
+        store_id=store_id,
         quantity_requested=data['quantity_requested'],
         note=data.get('note', '')
     )
@@ -142,3 +143,25 @@ def get_request(request_id):
         return jsonify({'error': 'Supply request not found'}), 404
 
     return jsonify({'request': supply_request.to_dict()}), 200
+
+@supply_bp.route('/<int:request_id>', methods=['DELETE'])
+@jwt_required()
+def delete_request(request_id):
+    claims = get_jwt()
+    role = claims.get('role')
+    current_user_id = int(get_jwt_identity())
+
+    supply_request = SupplyRequest.query.get(request_id)
+    if not supply_request:
+        return jsonify({'error': 'Request not found'}), 404
+
+    # Only clerks who own it or merchant can delete
+    if role == 'clerk' and supply_request.clerk_id != current_user_id:
+        return jsonify({'error': 'You can only delete your own requests'}), 403
+
+    if supply_request.status != 'pending' and role == 'clerk':
+        return jsonify({'error': 'Cannot delete a request that has already been responded to'}), 400
+
+    db.session.delete(supply_request)
+    db.session.commit()
+    return jsonify({'message': 'Request deleted successfully'}), 200

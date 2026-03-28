@@ -199,3 +199,48 @@ def get_summary():
             'total_entries': len(entries)
         }
     }), 200
+
+@inventory_bp.route('/<int:entry_id>', methods=['DELETE'])
+@jwt_required()
+def delete_entry(entry_id):
+    claims = get_jwt()
+    role = claims.get('role')
+    current_user_id = int(get_jwt_identity())
+
+    entry = InventoryEntry.query.get(entry_id)
+    if not entry:
+        return jsonify({'error': 'Entry not found'}), 404
+
+    # Clerks can only delete their own entries
+    if role == 'clerk' and entry.clerk_id != current_user_id:
+        return jsonify({'error': 'You can only delete your own entries'}), 403
+
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'message': 'Entry deleted successfully'}), 200
+
+
+@inventory_bp.route('/<int:entry_id>', methods=['PUT'])
+@jwt_required()
+def edit_entry(entry_id):
+    claims = get_jwt()
+    role = claims.get('role')
+    current_user_id = int(get_jwt_identity())
+
+    entry = InventoryEntry.query.get(entry_id)
+    if not entry:
+        return jsonify({'error': 'Entry not found'}), 404
+
+    if role == 'clerk' and entry.clerk_id != current_user_id:
+        return jsonify({'error': 'You can only edit your own entries'}), 403
+
+    data = request.get_json()
+    entry.quantity_received = data.get('quantity_received', entry.quantity_received)
+    entry.quantity_in_stock = data.get('quantity_in_stock', entry.quantity_in_stock)
+    entry.quantity_spoilt = data.get('quantity_spoilt', entry.quantity_spoilt)
+    entry.buying_price = data.get('buying_price', entry.buying_price)
+    entry.selling_price = data.get('selling_price', entry.selling_price)
+    entry.payment_status = data.get('payment_status', entry.payment_status)
+
+    db.session.commit()
+    return jsonify({'message': 'Entry updated ✅', 'entry': entry.to_dict()}), 200
