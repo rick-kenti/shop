@@ -33,7 +33,7 @@ def create_app():
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
-    CORS(app)
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
     # Import models so Flask-Migrate can detect them
     from app.models import User, Store, Product, InventoryEntry, SupplyRequest

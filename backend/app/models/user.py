@@ -25,11 +25,11 @@ class User(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'full_name': self.full_name,
-            'email': self.email,
-            'role': self.role,
-            'is_active': self.is_active,
-            'is_verified': self.is_verified,
+            'full_name': self.full_name or '',
+            'email': self.email or '',
+            'role': self.role or '',
+            'is_active': self.is_active if self.is_active is not None else True,
+            'is_verified': self.is_verified if self.is_verified is not None else False,
             'store_id': self.store_id,
             'created_at': self.created_at.strftime('%B %d, %Y %I:%M %p') if self.created_at else None
-        }
+    }
