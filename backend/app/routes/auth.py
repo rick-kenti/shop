@@ -6,6 +6,7 @@ from app.models.user import User
 from app.utils.validators import validate_email, validate_password, validate_required_fields
 from app.utils.email import (send_welcome_email, send_invite_email, send_login_notification)
 import bcrypt
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -384,3 +385,83 @@ def register_free():
         'message': f'Account created successfully! Welcome, {user.full_name} 🎉',
         'user': user.to_dict()
     }), 201
+
+import jwt as pyjwt
+
+@auth_bp.route('/google', methods=['POST'])
+def google_login():
+    """Handle Google OAuth login — creates account if first time"""
+    data = request.get_json()
+    google_token = data.get('token')
+
+    if not google_token:
+        return jsonify({'error': 'Google token is required'}), 400
+
+    try:
+        # Verify the Google token
+        import urllib.request
+        import json as json_lib
+
+        # Get Google's public keys and verify token
+        req = urllib.request.urlopen(
+            f'https://oauth2.googleapis.com/tokeninfo?id_token={google_token}'
+        )
+        google_data = json_lib.loads(req.read().decode())
+
+        # Check token is for our app
+        if google_data.get('aud') != os.getenv('GOOGLE_CLIENT_ID'):
+            return jsonify({'error': 'Invalid Google token'}), 401
+
+        email = google_data.get('email')
+        full_name = google_data.get('name', '')
+        google_id = google_data.get('sub')
+
+        if not email:
+            return jsonify({'error': 'Could not get email from Google'}), 400
+
+        # Find existing user or create new one
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            # First time Google login — create account as merchant
+            user = User(
+                full_name=full_name,
+                email=email,
+                password_hash=f'google_{google_id}',
+                role='merchant',
+                is_active=True,
+                is_verified=True,
+            )
+            db.session.add(user)
+            db.session.commit()
+
+            # Send welcome email for new user
+            try:
+                send_welcome_email(user.email, user.full_name, user.role)
+            except Exception as e:
+                print(f"Welcome email not sent: {e}")
+
+        elif not user.is_active:
+            return jsonify({'error': 'Your account has been deactivated'}), 403
+
+        # Send login notification
+        try:
+            send_login_notification(user.email, user.full_name, user.role)
+        except Exception as e:
+            print(f"Login notification not sent: {e}")
+
+        # Create JWT token
+        access_token = create_access_token(
+            identity=str(user.id),
+            additional_claims={'role': user.role}
+        )
+
+        return jsonify({
+            'message': f'Welcome, {user.full_name}! 👋',
+            'access_token': access_token,
+            'user': user.to_dict()
+        }), 200
+
+    except Exception as e:
+        print(f"Google OAuth error: {e}")
+        return jsonify({'error': 'Google login failed. Please try again.'}), 500
