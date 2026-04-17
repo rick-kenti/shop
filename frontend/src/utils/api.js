@@ -1,32 +1,45 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000/api';
+// Hardcode the Render URL as fallback — no trailing slash
+const PROD_URL = 'https://stockmanager-backend-ld7p.onrender.com/api';
+const DEV_URL = 'http://127.0.0.1:5000/api';
+
+const API_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' ? DEV_URL : PROD_URL);
+
+console.log('API connecting to:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 10000,
+  timeout: 60000, // 60 seconds — handles Render cold start
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  withCredentials: false,
 });
 
+// Attach token to every request
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`API ${config.method?.toUpperCase()} → ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => Promise.reject(error)
 );
 
+// Handle responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
-      console.error('Network error — is Flask running on port 5000?');
+      // Network error — backend sleeping or CORS issue
+      console.error('Network Error:', error.message);
     } else {
-      console.error(`API Error ${error.response.status}:`, error.response.data);
+      console.error(`${error.response.status}:`, error.response.data);
       if (error.response.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
