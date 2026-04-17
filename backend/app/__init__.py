@@ -37,7 +37,7 @@ def create_app():
     r"/api/*": {
         "origins": [
             "http://localhost:3000",
-            "https://shop-8mfu.vercel.app"
+            "https://shop-29ms-cdj1c103k-rick-kentis-projects.vercel.app/login"
         ]
     }
 })
