@@ -1,14 +1,24 @@
 import axios from 'axios';
 
-// Detect environment automatically
-const isLocal = window.location.hostname === 'localhost' ||
-                window.location.hostname === '127.0.0.1';
+// Get the backend URL — works both locally and on Vercel
+const getBaseURL = () => {
+  // If running locally
+  if (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1') {
+    return 'http://127.0.0.1:5000/api';
+  }
+  // If running on Vercel — use the env variable
+  const envURL = process.env.REACT_APP_API_URL;
+  if (envURL) {
+    console.log('Using env API URL:', envURL);
+    return envURL;
+  }
+  // Last resort fallback — replace this with your Render URL
+  return 'https://stockmanager-backend-ld7p.onrender.com/api';
+};
 
-const API_URL = isLocal
-  ? 'http://127.0.0.1:5000/api'
-  : process.env.REACT_APP_API_URL || 'https://stockmanager-backend-ld7p.onrender.com';
-
-console.log('🌐 API URL:', API_URL);
+const API_URL = getBaseURL();
+console.log('API_URL =', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -23,22 +33,25 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    console.log(`→ ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => Promise.reject(error)
 );
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ ${response.status} ${response.config.url}`);
+    return response;
+  },
   (error) => {
     if (!error.response) {
-      console.error('❌ Network Error — backend may be sleeping or CORS blocked');
-      console.error('Request URL was:', error.config?.baseURL + error.config?.url);
+      console.error('❌ NETWORK ERROR');
+      console.error('URL attempted:', error.config?.baseURL + error.config?.url);
+      console.error('Error:', error.message);
     } else {
-      console.error(`❌ ${error.response.status}:`, error.response.data);
+      console.error(`❌ ${error.response.status}`, error.response.data);
       if (error.response.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');

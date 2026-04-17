@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -17,15 +17,15 @@ mail = Mail()
 def create_app():
     app = Flask(__name__)
 
-    # Fix Render postgres:// → postgresql://
+    # Fix Render postgres URL
     database_url = os.getenv('DATABASE_URL', '')
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'fallback-secret')
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret')
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key')
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
     app.config['MAIL_SERVER'] = 'smtp.gmail.com'
     app.config['MAIL_PORT'] = 587
     app.config['MAIL_USE_TLS'] = True
@@ -39,36 +39,29 @@ def create_app():
     jwt.init_app(app)
     mail.init_app(app)
 
-    # ── CORS — manually handle everything ──
-    @app.after_request
-    def apply_cors(response):
-        origin = request.headers.get('Origin', '*')
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'false'
-        response.headers['Access-Control-Allow-Methods'] = \
-            'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = \
-            'Content-Type, Authorization, Accept, X-Requested-With'
-        return response
-
+    # Handle ALL OPTIONS requests before anything else
     @app.before_request
     def handle_options():
         if request.method == 'OPTIONS':
-            response = Response()
-            origin = request.headers.get('Origin', '*')
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = \
-                'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = \
-                'Content-Type, Authorization, Accept, X-Requested-With'
-            response.headers['Access-Control-Max-Age'] = '3600'
-            response.status_code = 200
-            return response
+            res = Response('', status=200)
+            res.headers['Access-Control-Allow-Origin'] = '*'
+            res.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+            res.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Accept'
+            res.headers['Access-Control-Max-Age'] = '3600'
+            return res
+
+    # Add CORS headers to every single response
+    @app.after_request
+    def add_cors(response):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Accept'
+        return response
 
     # Import models
     from app.models import User, Store, Product, InventoryEntry, SupplyRequest
 
-    # Register blueprints
+    # Register routes
     from app.routes.auth import auth_bp
     from app.routes.stores import stores_bp
     from app.routes.products import products_bp
