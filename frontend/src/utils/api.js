@@ -1,17 +1,18 @@
 import axios from 'axios';
 
-// Hardcode the Render URL as fallback — no trailing slash
-const PROD_URL = 'https://stockmanager-backend-ld7p.onrender.com/api';
-const DEV_URL = 'http://127.0.0.1:5000/api';
+// Detect environment automatically
+const isLocal = window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
 
-const API_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'localhost' ? DEV_URL : PROD_URL);
+const API_URL = isLocal
+  ? 'http://127.0.0.1:5000/api'
+  : process.env.REACT_APP_API_URL || 'https://stockmanager-backend-ld7p.onrender.com';
 
-console.log('API connecting to:', API_URL);
+console.log('🌐 API URL:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 60000, // 60 seconds — handles Render cold start
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -19,7 +20,6 @@ const api = axios.create({
   withCredentials: false,
 });
 
-// Attach token to every request
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -31,15 +31,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
-      // Network error — backend sleeping or CORS issue
-      console.error('Network Error:', error.message);
+      console.error('❌ Network Error — backend may be sleeping or CORS blocked');
+      console.error('Request URL was:', error.config?.baseURL + error.config?.url);
     } else {
-      console.error(`${error.response.status}:`, error.response.data);
+      console.error(`❌ ${error.response.status}:`, error.response.data);
       if (error.response.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
