@@ -37,10 +37,10 @@ def create_app():
     r"/api/*": {
         "origins": [
             "http://localhost:3000",
-            "https://stockmanager-frontend.vercel.app"
+            "https://shop-8mfu.vercel.app"
         ]
     }
-}, supports_credentials=False)
+})
 
     # Import models so Flask-Migrate can detect them
     from app.models import User, Store, Product, InventoryEntry, SupplyRequest
