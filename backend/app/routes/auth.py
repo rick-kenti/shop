@@ -10,6 +10,48 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+@auth_bp.route('/debug-login', methods=['POST'])
+def debug_login():
+    """Temporary debug endpoint to find 500 cause"""
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'step': 'FAILED', 'reason': 'No JSON body received'}), 400
+
+        email = data.get('email', '').strip().lower()
+
+        # Step 1 — database connection
+        try:
+            from app import db
+            db.session.execute(db.text('SELECT 1'))
+            db_status = 'connected'
+        except Exception as e:
+            return jsonify({'step': 'DATABASE', 'error': str(e)}), 500
+
+        # Step 2 — find user
+        try:
+            user = User.query.filter_by(email=email).first()
+            user_status = 'found' if user else 'not found'
+        except Exception as e:
+            return jsonify({'step': 'USER_QUERY', 'error': str(e)}), 500
+
+        # Step 3 — to_dict
+        if user:
+            try:
+                user_dict = user.to_dict()
+            except Exception as e:
+                return jsonify({'step': 'TO_DICT', 'error': str(e)}), 500
+
+        return jsonify({
+            'step': 'ALL_PASSED',
+            'database': db_status,
+            'user': user_status,
+            'email_searched': email
+        }), 200
+
+    except Exception as e:
+        return jsonify({'step': 'UNKNOWN', 'error': str(e)}), 500
+
 auth_bp = Blueprint('auth', __name__)
 
 
@@ -75,55 +117,71 @@ def register_merchant():
 # -----------------------------------------------
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-
-    # Validate required fields
-    missing = validate_required_fields(data, ['email', 'password'])
-    if missing:
-        return jsonify({'error': f'Missing fields: {", ".join(missing)}'}), 400
-
-    # Find user by email
-    user = User.query.filter_by(email=data['email']).first()
-
-    if not user:
-        return jsonify({'error': 'Invalid email or password'}), 401
-
-    # Check if account is active
-    if not user.is_active:
-        return jsonify({'error': 'Your account has been deactivated. Contact your admin.'}), 403
-
-    # Check if account is verified
-    if not user.is_verified:
-        return jsonify({'error': 'Please verify your account first via the invite link sent to your email.'}), 403
-
-    # Check password
-    if user.password_hash == 'pending' or user.password_hash == '':
-        return jsonify({'error': 'Account not activated yet. Please use the invite link to set your password.'}), 403
-
-    password_correct = bcrypt.checkpw(
-        data['password'].encode('utf-8'),
-        user.password_hash.encode('utf-8')
-    )
-    if not password_correct:
-        return jsonify({'error': 'Invalid email or password'}), 401
-
-    # Create JWT token
-    access_token = create_access_token(
-        identity=str(user.id),
-        additional_claims={'role': user.role}
-    )
-
-    # Send login notification email
     try:
-        send_login_notification(user.email, user.full_name, user.role)
-    except Exception as e:
-        print(f"Login email not sent: {e}")
+        data = request.get_json(silent=True)
 
-    return jsonify({
-        'message': f'Welcome back, {user.full_name}! 👋',
-        'access_token': access_token,
-        'user': user.to_dict()
-    }), 200
+        if not data:
+            return jsonify({'error': 'No data received. Send JSON body.'}), 400
+
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '').strip()
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        # Find user
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+        if not user.is_active:
+            return jsonify({'error': 'Account deactivated. Contact your admin.'}), 403
+
+        if not user.is_verified:
+            return jsonify({'error': 'Account not verified. Use your invite link.'}), 403
+
+        # Handle special password hashes
+        if not user.password_hash or user.password_hash in ['pending', 'google-oauth', '']:
+            return jsonify({'error': 'This account uses Google Sign In. Use the Google button.'}), 403
+
+        # Check password safely
+        try:
+            password_correct = bcrypt.checkpw(
+                password.encode('utf-8'),
+                user.password_hash.encode('utf-8')
+            )
+        except Exception as pw_error:
+            print(f"Password check error: {pw_error}")
+            return jsonify({'error': 'Login error. Please reset your password.'}), 500
+
+        if not password_correct:
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+        # Create token
+        access_token = create_access_token(
+            identity=str(user.id),
+            additional_claims={'role': user.role}
+        )
+
+        # Send login notification (don't fail login if email fails)
+        try:
+            from app.utils.email import send_login_notification
+            send_login_notification(user.email, user.full_name, user.role)
+        except Exception as email_error:
+            print(f"Login email not sent: {email_error}")
+
+        return jsonify({
+            'message': f'Welcome back, {user.full_name}! 👋',
+            'access_token': access_token,
+            'user': user.to_dict()
+        }), 200
+
+    except Exception as e:
+        print(f"Login error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 # -----------------------------------------------

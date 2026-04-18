@@ -22,14 +22,27 @@ class User(db.Model):
     inventory_entries = db.relationship('InventoryEntry', back_populates='clerk')
     supply_requests = db.relationship('SupplyRequest', back_populates='clerk')
 
-    def to_dict(self):
+def to_dict(self):
+    try:
         return {
             'id': self.id,
             'full_name': self.full_name or '',
             'email': self.email or '',
             'role': self.role or '',
-            'is_active': self.is_active if self.is_active is not None else True,
-            'is_verified': self.is_verified if self.is_verified is not None else False,
+            'is_active': bool(self.is_active),
+            'is_verified': bool(self.is_verified),
             'store_id': self.store_id,
             'created_at': self.created_at.strftime('%B %d, %Y %I:%M %p') if self.created_at else None
-    }
+        }
+    except Exception as e:
+        print(f"to_dict error: {e}")
+        return {
+            'id': self.id,
+            'full_name': self.full_name or '',
+            'email': self.email or '',
+            'role': self.role or '',
+            'is_active': True,
+            'is_verified': True,
+            'store_id': None,
+            'created_at': None
+        }
