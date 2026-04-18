@@ -10,6 +10,8 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+auth_bp = Blueprint('auth', __name__)
+
 @auth_bp.route('/debug-login', methods=['POST'])
 def debug_login():
     """Temporary debug endpoint to find 500 cause"""
@@ -52,7 +54,7 @@ def debug_login():
     except Exception as e:
         return jsonify({'step': 'UNKNOWN', 'error': str(e)}), 500
 
-auth_bp = Blueprint('auth', __name__)
+
 
 
 # -----------------------------------------------
