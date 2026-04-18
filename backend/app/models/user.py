@@ -8,7 +8,7 @@ class User(db.Model):
     full_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'merchant', 'admin', 'clerk'
+    role = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     is_verified = db.Column(db.Boolean, default=False)
     invite_token = db.Column(db.String(256), nullable=True)
@@ -22,27 +22,28 @@ class User(db.Model):
     inventory_entries = db.relationship('InventoryEntry', back_populates='clerk')
     supply_requests = db.relationship('SupplyRequest', back_populates='clerk')
 
-def to_dict(self):
-    try:
-        return {
-            'id': self.id,
-            'full_name': self.full_name or '',
-            'email': self.email or '',
-            'role': self.role or '',
-            'is_active': bool(self.is_active),
-            'is_verified': bool(self.is_verified),
-            'store_id': self.store_id,
-            'created_at': self.created_at.strftime('%B %d, %Y %I:%M %p') if self.created_at else None
-        }
-    except Exception as e:
-        print(f"to_dict error: {e}")
-        return {
-            'id': self.id,
-            'full_name': self.full_name or '',
-            'email': self.email or '',
-            'role': self.role or '',
-            'is_active': True,
-            'is_verified': True,
-            'store_id': None,
-            'created_at': None
-        }
+    # ✅ FIXED: now inside class
+    def to_dict(self):
+        try:
+            return {
+                'id': self.id,
+                'full_name': self.full_name or '',
+                'email': self.email or '',
+                'role': self.role or '',
+                'is_active': bool(self.is_active),
+                'is_verified': bool(self.is_verified),
+                'store_id': self.store_id,
+                'created_at': self.created_at.strftime('%B %d, %Y %I:%M %p') if self.created_at else None
+            }
+        except Exception as e:
+            print(f"to_dict error: {e}")
+            return {
+                'id': self.id,
+                'full_name': self.full_name or '',
+                'email': self.email or '',
+                'role': self.role or '',
+                'is_active': True,
+                'is_verified': True,
+                'store_id': None,
+                'created_at': None
+            }
