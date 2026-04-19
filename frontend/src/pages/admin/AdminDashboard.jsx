@@ -147,37 +147,205 @@ const AdminDashboard = () => {
   );
 
   // ── PRODUCTS TAB ──
-  const ProductsTab = () => (
-    <div className="card">
-      <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600' }}>Products in Your Store</h3>
-      {products.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
-          <div style={{ fontSize: '32px', marginBottom: '8px' }}>📦</div>
-          <p>No products yet. Ask your merchant to add products to this store.</p>
+ const ProductsTab = () => {
+  const [newProduct, setNewProduct] = useState({ name: '', description: '' });
+  const [adding, setAdding] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editForm, setEditForm] = useState({});
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    if (!newProduct.name.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+    setAdding(true);
+    try {
+      await api.post('/products/', {
+        name: newProduct.name.trim(),
+        description: newProduct.description.trim(),
+      });
+      toast.success(`Product "${newProduct.name}" added ✅`);
+      setNewProduct({ name: '', description: '' });
+      loadProducts();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to add product');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (productId, name) => {
+    if (!window.confirm(`Delete "${name}"?`)) return;
+    try {
+      await api.delete(`/products/${productId}`);
+      toast.success(`"${name}" deleted`);
+      loadProducts();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Delete failed');
+    }
+  };
+
+  const handleEditSave = async (productId) => {
+    try {
+      await api.put(`/products/${productId}`, editForm);
+      toast.success('Product updated ✅');
+      setEditingProduct(null);
+      loadProducts();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Update failed');
+    }
+  };
+
+  return (
+    <>
+      {/* Add Product Form */}
+      <div style={{
+        background: 'linear-gradient(135deg, #34d39922, #05996911)',
+        border: '1px solid rgba(52,211,153,0.3)',
+        borderRadius: '16px', padding: '24px', marginBottom: '24px'
+      }}>
+        <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
+          ➕ Add New Product
+        </h3>
+        <form onSubmit={handleAddProduct}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Product Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Sugar 1kg"
+                value={newProduct.name}
+                onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                required
+                style={{
+                  width: '100%', padding: '10px 12px',
+                  border: '2px solid rgba(52,211,153,0.3)',
+                  borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Description
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. White refined sugar"
+                value={newProduct.description}
+                onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
+                style={{
+                  width: '100%', padding: '10px 12px',
+                  border: '2px solid rgba(52,211,153,0.3)',
+                  borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={adding}
+              style={{
+                padding: '10px 24px',
+                background: adding ? '#94a3b8' : 'linear-gradient(135deg, #34d399, #059669)',
+                color: '#fff', border: 'none', borderRadius: '8px',
+                fontSize: '14px', fontWeight: '700', cursor: adding ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap', boxShadow: '0 4px 15px rgba(52,211,153,0.3)'
+              }}>
+              {adding ? 'Adding...' : '+ Add Product'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Products List */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>
+            All Products ({products.length})
+          </h3>
         </div>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc' }}>
-              {['#', 'Product Name', 'Description', 'Added'].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#64748b', fontWeight: '600', fontSize: '12px', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p, i) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '10px 14px', color: '#9ca3af' }}>{i + 1}</td>
-                <td style={{ padding: '10px 14px', fontWeight: '500', color: '#111827' }}>{p.name}</td>
-                <td style={{ padding: '10px 14px', color: '#6b7280' }}>{p.description || '—'}</td>
-                <td style={{ padding: '10px 14px', color: '#6b7280' }}>{p.created_at}</td>
+
+        {products.length === 0 ? (
+          <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>📦</div>
+            <p style={{ fontSize: '16px', marginBottom: '8px' }}>No products yet</p>
+            <p style={{ fontSize: '13px' }}>Use the form above to add your first product</p>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['#', 'Product Name', 'Description', 'Store', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontWeight: '600', fontSize: '12px', textTransform: 'uppercase' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+            </thead>
+            <tbody>
+              {products.map((p, i) => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', background: editingProduct === p.id ? '#f0fdf4' : '#fff' }}>
+                  <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{i + 1}</td>
+
+                  {editingProduct === p.id ? (
+                    <>
+                      <td style={{ padding: '12px 16px' }}>
+                        <input
+                          value={editForm.name || ''}
+                          onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                          style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', width: '140px' }}
+                        />
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <input
+                          value={editForm.description || ''}
+                          onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                          style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', width: '160px' }}
+                        />
+                      </td>
+                      <td style={{ padding: '12px 16px', color: '#6b7280' }}>—</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => handleEditSave(p.id)}
+                            style={{ padding: '5px 14px', fontSize: '12px', background: '#d1fae5', border: '1px solid #86efac', borderRadius: '6px', cursor: 'pointer', color: '#065f46', fontWeight: '600' }}>
+                            Save
+                          </button>
+                          <button onClick={() => setEditingProduct(null)}
+                            style={{ padding: '5px 14px', fontSize: '12px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#475569' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ padding: '12px 16px', fontWeight: '600', color: '#111827' }}>{p.name}</td>
+                      <td style={{ padding: '12px 16px', color: '#6b7280' }}>{p.description || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#6b7280' }}>Store #{p.store_id}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={() => { setEditingProduct(p.id); setEditForm({ name: p.name, description: p.description }); }}
+                            style={{ padding: '5px 14px', fontSize: '12px', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '6px', cursor: 'pointer', color: '#1d4ed8', fontWeight: '600' }}>
+                            Edit
+                          </button>
+                          <button onClick={() => handleDelete(p.id, p.name)}
+                            style={{ padding: '5px 14px', fontSize: '12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', color: '#991b1b', fontWeight: '600' }}>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
   );
+};
 
   // ── INVENTORY TAB ──
   const InventoryTab = () => (

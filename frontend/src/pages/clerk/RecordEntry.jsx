@@ -21,10 +21,20 @@ useEffect(() => {
       const list = res.data.products || [];
       setProducts(list);
       if (list.length === 0) {
-        toast.warning('No products found. Ask your admin to add products to your store.');
+        toast.warning(
+          'No products found in your store. Ask your admin to add products first.',
+          { autoClose: 6000 }
+        );
       }
     } catch (e) {
-      toast.error('Failed to load products: ' + (e.response?.data?.error || e.message));
+      console.error('Products error:', e);
+      // Try getting all products as fallback
+      try {
+        const fallback = await api.get('/products/?per_page=100');
+        setProducts(fallback.data.products || []);
+      } catch (e2) {
+        toast.error('Failed to load products');
+      }
     }
   };
   fetchProducts();

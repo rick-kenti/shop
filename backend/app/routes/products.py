@@ -4,180 +4,127 @@ from app import db
 from app.models.product import Product
 from app.models.store import Store
 from app.models.user import User
-import cloudinary
-import cloudinary.uploader
-import os
 
 products_bp = Blueprint('products', __name__)
 
-# Setup Cloudinary
-cloudinary.config(
-    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-    api_key=os.getenv('CLOUDINARY_API_KEY'),
-    api_secret=os.getenv('CLOUDINARY_API_SECRET')
-)
 
-
-# -----------------------------------------------
-# CREATE A PRODUCT (merchant or admin)
-# -----------------------------------------------
-@products_bp.route('/', methods=['POST'])
-@jwt_required()
-def create_product():
-    claims = get_jwt()
-    role = claims.get('role')
-
-    if role not in ['merchant', 'admin']:
-        return jsonify({'error': 'Only merchants and admins can add products'}), 403
-
-    # Handle both JSON and form data (for image uploads)
-    name = request.form.get('name') or request.json.get('name')
-    description = request.form.get('description') or request.json.get('description', '')
-    store_id = request.form.get('store_id') or request.json.get('store_id')
-
-    if not name:
-        return jsonify({'error': 'Product name is required'}), 400
-
-    if not store_id:
-        return jsonify({'error': 'Store ID is required'}), 400
-
-    store = Store.query.get(store_id)
-    if not store:
-        return jsonify({'error': 'Store not found'}), 404
-
-    image_url = None
-
-    # Handle image upload to Cloudinary
-    if 'image' in request.files:
-        file = request.files['image']
-        try:
-            upload_result = cloudinary.uploader.upload(
-                file,
-                folder='inventory_app/products',
-                transformation=[
-                    {'width': 500, 'height': 500, 'crop': 'fill'}
-                ]
-            )
-            image_url = upload_result['secure_url']
-        except Exception as e:
-            return jsonify({'error': f'Image upload failed: {str(e)}'}), 500
-
-    product = Product(
-        name=name,
-        description=description,
-        image_url=image_url,
-        store_id=int(store_id)
-    )
-
-    db.session.add(product)
-    db.session.commit()
-
-    return jsonify({
-        'message': 'Product created successfully ✅',
-        'product': product.to_dict()
-    }), 201
-
-
-# -----------------------------------------------
-# GET ALL PRODUCTS (with pagination)
-# -----------------------------------------------
 @products_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_products():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(int(current_user_id))
-    claims = get_jwt()
-    role = claims.get('role')
+    try:
+        current_user_id = int(get_jwt_identity())
+        current_user = User.query.get(current_user_id)
+        claims = get_jwt()
+        role = claims.get('role')
 
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 100, type=int)
 
-    if role == 'merchant':
-        products = Product.query.paginate(page=page, per_page=per_page, error_out=False)
-    else:
-        if not current_user or not current_user.store_id:
-            return jsonify({'products': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
-        products = Product.query.filter_by(
-            store_id=current_user.store_id
-        ).paginate(page=page, per_page=per_page, error_out=False)
+        if role == 'merchant':
+            # Merchant sees all products
+            products = Product.query.paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+        else:
+            # Admin and clerk — see products in their store
+            if not current_user or not current_user.store_id:
+                # No store assigned — return all products as fallback
+                products = Product.query.paginate(
+                    page=page, per_page=per_page, error_out=False
+                )
+            else:
+                products = Product.query.filter_by(
+                    store_id=current_user.store_id
+                ).paginate(page=page, per_page=per_page, error_out=False)
 
-    return jsonify({
-        'products': [p.to_dict() for p in products.items],
-        'total': products.total,
-        'pages': products.pages,
-        'current_page': products.page
-    }), 200
+        return jsonify({
+            'products': [p.to_dict() for p in products.items],
+            'total': products.total,
+            'pages': products.pages,
+            'current_page': products.page
+        }), 200
 
-# -----------------------------------------------
-# GET ONE PRODUCT
-# -----------------------------------------------
+    except Exception as e:
+        print(f"Get products error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'products': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
+
+
+@products_bp.route('/', methods=['POST'])
+@jwt_required()
+def create_product():
+    try:
+        claims = get_jwt()
+        role = claims.get('role')
+        current_user_id = int(get_jwt_identity())
+        current_user = User.query.get(current_user_id)
+
+        # Both merchant AND admin can add products
+        if role not in ['merchant', 'admin']:
+            return jsonify({'error': 'Only merchants and admins can add products'}), 403
+
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'error': 'No data received'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Product name is required'}), 400
+
+        # Determine store_id
+        store_id = data.get('store_id')
+
+        if not store_id:
+            # Auto-assign store
+            if role == 'admin' and current_user.store_id:
+                store_id = current_user.store_id
+            else:
+                # Use first available store
+                first_store = Store.query.first()
+                if first_store:
+                    store_id = first_store.id
+                else:
+                    return jsonify({'error': 'No stores exist yet. Create a store first.'}), 400
+
+        store = Store.query.get(int(store_id))
+        if not store:
+            return jsonify({'error': 'Store not found'}), 404
+
+        product = Product(
+            name=name,
+            description=data.get('description', ''),
+            image_url=data.get('image_url'),
+            store_id=int(store_id)
+        )
+
+        db.session.add(product)
+        db.session.commit()
+
+        return jsonify({
+            'message': f'Product "{name}" created successfully ✅',
+            'product': product.to_dict()
+        }), 201
+
+    except Exception as e:
+        print(f"Create product error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @products_bp.route('/<int:product_id>', methods=['GET'])
 @jwt_required()
 def get_product(product_id):
     product = Product.query.get(product_id)
-
     if not product:
         return jsonify({'error': 'Product not found'}), 404
-
     return jsonify({'product': product.to_dict()}), 200
 
 
-# -----------------------------------------------
-# UPDATE A PRODUCT (merchant or admin)
-# -----------------------------------------------
 @products_bp.route('/<int:product_id>', methods=['PUT'])
 @jwt_required()
 def update_product(product_id):
-    claims = get_jwt()
-    if claims.get('role') not in ['merchant', 'admin']:
-        return jsonify({'error': 'Only merchants and admins can update products'}), 403
-
-    product = Product.query.get(product_id)
-    if not product:
-        return jsonify({'error': 'Product not found'}), 404
-
-    data = request.get_json()
-    product.name = data.get('name', product.name)
-    product.description = data.get('description', product.description)
-
-    # Handle image update
-    if 'image' in request.files:
-        file = request.files['image']
-        try:
-            upload_result = cloudinary.uploader.upload(
-                file,
-                folder='inventory_app/products',
-                transformation=[
-                    {'width': 500, 'height': 500, 'crop': 'fill'}
-                ]
-            )
-            product.image_url = upload_result['secure_url']
-        except Exception as e:
-            return jsonify({'error': f'Image upload failed: {str(e)}'}), 500
-
-    db.session.commit()
-
-    return jsonify({
-        'message': 'Product updated successfully ✅',
-        'product': product.to_dict()
-    }), 200
-
-
-# -----------------------------------------------
-# DELETE A PRODUCT (merchant only)
-# -----------------------------------------------
-@products_bp.route('/<int:product_id>', methods=['DELETE'])
-@jwt_required()
-def delete_product(product_id):
-    claims = get_jwt()
-    if claims.get('role') != 'merchant':
-        return jsonify({'error': 'Only merchants can delete products'}), 403
-
-    product = Product.query.get(product_id)
-    if not product:
-        return jsonify({'error': 'Product not found'}), 404
-
-    db.session.delete(product)
-    db.session.commit()
-
-    return jsonify({'message': 'Product deleted successfully ✅'}), 200
+    try:
+        claims = get_jwt()
+        if claims.get('role') not in ['m
