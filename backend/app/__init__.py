@@ -17,7 +17,7 @@ mail = Mail()
 def create_app():
     app = Flask(__name__)
 
-    # Fix Render postgres URL
+    # Fix Render postgres:// to postgresql://
     database_url = os.getenv('DATABASE_URL', '')
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
@@ -39,44 +39,49 @@ def create_app():
     jwt.init_app(app)
     mail.init_app(app)
 
-    # Handle ALL OPTIONS requests before anything else
+    # ── CORS — inside create_app so app exists ──
     @app.before_request
     def handle_options():
         if request.method == 'OPTIONS':
             res = Response('', status=200)
             res.headers['Access-Control-Allow-Origin'] = '*'
-            res.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
-            res.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Accept'
+            res.headers['Access-Control-Allow-Methods'] = \
+                'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+            res.headers['Access-Control-Allow-Headers'] = \
+                'Content-Type,Authorization,Accept'
             res.headers['Access-Control-Max-Age'] = '3600'
             return res
 
- # Add CORS headers to every single response
-@app.after_request
-def add_cors(response):
-    allowed_origins = [
-        'http://localhost:3000',
-        'https://shop-29ms.vercel.app',
-    ]
-    origin = request.headers.get('Origin', '')
-    if origin in allowed_origins or not origin:
-        response.headers['Access-Control-Allow-Origin'] = origin or '*'
-    else:
+    @app.after_request
+    def add_cors(response):
         response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = \
-        'GET,POST,PUT,PATCH,DELETE,OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = \
-        'Content-Type,Authorization,Accept'
-    response.headers['Access-Control-Allow-Credentials'] = 'false'
-    return response
-
-@app.before_request
-def handle_options():
-    if request.method == 'OPTIONS':
-        res = Response('', status=200)
-        res.headers['Access-Control-Allow-Origin'] = '*'
-        res.headers['Access-Control-Allow-Methods'] = \
+        response.headers['Access-Control-Allow-Methods'] = \
             'GET,POST,PUT,PATCH,DELETE,OPTIONS'
-        res.headers['Access-Control-Allow-Headers'] = \
+        response.headers['Access-Control-Allow-Headers'] = \
             'Content-Type,Authorization,Accept'
-        res.headers['Access-Control-Max-Age'] = '3600'
-        return res
+        response.headers['Access-Control-Allow-Credentials'] = 'false'
+        return response
+
+    # ── Import models ──
+    from app.models import User, Store, Product, InventoryEntry, SupplyRequest
+
+    # ── Register blueprints ──
+    from app.routes.auth import auth_bp
+    from app.routes.stores import stores_bp
+    from app.routes.products import products_bp
+    from app.routes.inventory import inventory_bp
+    from app.routes.supply_requests import supply_bp
+
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(stores_bp, url_prefix='/api/stores')
+    app.register_blueprint(products_bp, url_prefix='/api/products')
+    app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
+    app.register_blueprint(supply_bp, url_prefix='/api/supply-requests')
+
+    try:
+        from app.utils.swagger import setup_swagger
+        setup_swagger(app)
+    except Exception as e:
+        print(f"Swagger skipped: {e}")
+
+    return app
