@@ -240,6 +240,8 @@ def invite_user():
     # Try to send email but don't fail if email isn't configured
     try:
         invite_link = f"http://localhost:3000/register?token={invite_token}"
+        frontend_url = os.getenv('FRONTEND_URL', 'https://shop-29ms.vercel.app')
+        invite_link = f"{frontend_url}/register?token={invite_token}"
         send_invite_email(data['email'], invite_link, data['role'])
     except Exception as e:
         print(f"Email not sent (not configured): {e}")
@@ -248,6 +250,7 @@ def invite_user():
         'message': f'User invited successfully ✅',
         'invite_token': invite_token,
         'invite_link': f'http://localhost:3000/register?token={invite_token}',
+        'invite_link': f'{frontend_url}/register?token={invite_token}',
         'note': 'Share this link with the user to complete registration'
     }), 200
 

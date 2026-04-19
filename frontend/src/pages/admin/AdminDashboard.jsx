@@ -13,7 +13,7 @@ import api from '../../utils/api';
 const AdminDashboard = () => {
   const dispatch = useDispatch();
   const location = useLocation();
-  const { entries, summary, loading, pages, currentPage } = useSelector(s => s.inventory);
+  const { entries = [], summary, loading, pages, currentPage } = useSelector(s => s.inventory);
   const { user } = useSelector(s => s.auth);
 
   const [products, setProducts] = useState([]);
@@ -74,12 +74,12 @@ const AdminDashboard = () => {
     }
   };
 
-  const chartData = entries.slice(0, 8).map(e => ({
-    name: (e.product_name || 'Item').slice(0, 10),
-    received: e.quantity_received,
-    inStock: e.quantity_in_stock,
-    spoilt: e.quantity_spoilt,
-  }));
+ const chartData = (entries || []).slice(0, 8).map(e => ({
+  name: (e.product_name || 'Item').slice(0, 10),
+  received: e.quantity_received || 0,
+  inStock: e.quantity_in_stock || 0,
+  spoilt: e.quantity_spoilt || 0,
+}));
 
   // ── DASHBOARD TAB ──
   const DashboardTab = () => (
