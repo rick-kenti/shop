@@ -1,13 +1,14 @@
 import axios from 'axios';
 
 const getBaseURL = () => {
-  // Local development — talk directly to Flask
+  // Local development
   if (window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1') {
     return 'http://127.0.0.1:5000/api';
   }
-  // Production on Vercel — use same domain, Vercel rewrites handle it
-  return `${window.location.origin}/api`;
+  // Production — call Render backend directly
+  // This bypasses Vercel rewrite which blocks POST/PUT/DELETE
+  return 'https://stockmanager-backend-ld7p.onrender.com/api';
 };
 
 const API_URL = getBaseURL();
