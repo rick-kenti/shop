@@ -1,20 +1,13 @@
 import axios from 'axios';
 
-// Get the backend URL — works both locally and on Vercel
 const getBaseURL = () => {
-  // If running locally
+  // Local development — talk directly to Flask
   if (window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1') {
     return 'http://127.0.0.1:5000/api';
   }
-  // If running on Vercel — use the env variable
-  const envURL = process.env.REACT_APP_API_URL;
-  if (envURL) {
-    console.log('Using env API URL:', envURL);
-    return envURL;
-  }
-  // Last resort fallback — replace this with your Render URL
-  return 'https://stockmanager-backend-ld7p.onrender.com/api';
+  // Production on Vercel — use same domain, Vercel rewrites handle it
+  return `${window.location.origin}/api`;
 };
 
 const API_URL = getBaseURL();
