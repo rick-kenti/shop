@@ -21,14 +21,11 @@ def get_products():
         per_page = request.args.get('per_page', 100, type=int)
 
         if role == 'merchant':
-            # Merchant sees all products
             products = Product.query.paginate(
                 page=page, per_page=per_page, error_out=False
             )
         else:
-            # Admin and clerk — see products in their store
             if not current_user or not current_user.store_id:
-                # No store assigned — return all products as fallback
                 products = Product.query.paginate(
                     page=page, per_page=per_page, error_out=False
                 )
@@ -46,9 +43,12 @@ def get_products():
 
     except Exception as e:
         print(f"Get products error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'products': [], 'total': 0, 'pages': 0, 'current_page': 1}), 200
+        return jsonify({
+            'products': [],
+            'total': 0,
+            'pages': 0,
+            'current_page': 1
+        }), 200
 
 
 @products_bp.route('/', methods=['POST'])
@@ -60,9 +60,10 @@ def create_product():
         current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
 
-        # Both merchant AND admin can add products
         if role not in ['merchant', 'admin']:
-            return jsonify({'error': 'Only merchants and admins can add products'}), 403
+            return jsonify({
+                'error': 'Only merchants and admins can add products'
+            }), 403
 
         data = request.get_json(silent=True)
         if not data:
@@ -72,20 +73,19 @@ def create_product():
         if not name:
             return jsonify({'error': 'Product name is required'}), 400
 
-        # Determine store_id
         store_id = data.get('store_id')
 
         if not store_id:
-            # Auto-assign store
-            if role == 'admin' and current_user.store_id:
+            if role == 'admin' and current_user and current_user.store_id:
                 store_id = current_user.store_id
             else:
-                # Use first available store
                 first_store = Store.query.first()
                 if first_store:
                     store_id = first_store.id
                 else:
-                    return jsonify({'error': 'No stores exist yet. Create a store first.'}), 400
+                    return jsonify({
+                        'error': 'No stores exist. Create a store first.'
+                    }), 400
 
         store = Store.query.get(int(store_id))
         if not store:
@@ -102,7 +102,7 @@ def create_product():
         db.session.commit()
 
         return jsonify({
-            'message': f'Product "{name}" created successfully ✅',
+            'message': f'Product created successfully',
             'product': product.to_dict()
         }), 201
 
@@ -127,4 +127,46 @@ def get_product(product_id):
 def update_product(product_id):
     try:
         claims = get_jwt()
-        if claims.get('role') not in ['m
+        if claims.get('role') not in ['merchant', 'admin']:
+            return jsonify({
+                'error': 'Only merchants and admins can update products'
+            }), 403
+
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        product.name = data.get('name', product.name)
+        product.description = data.get('description', product.description)
+
+        db.session.commit()
+        return jsonify({
+            'message': 'Product updated successfully',
+            'product': product.to_dict()
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@products_bp.route('/<int:product_id>', methods=['DELETE'])
+@jwt_required()
+def delete_product(product_id):
+    try:
+        claims = get_jwt()
+        if claims.get('role') not in ['merchant', 'admin']:
+            return jsonify({
+                'error': 'Only merchants and admins can delete products'
+            }), 403
+
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+
+        db.session.delete(product)
+        db.session.commit()
+        return jsonify({'message': 'Product deleted successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
